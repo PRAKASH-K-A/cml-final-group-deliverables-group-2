@@ -35,6 +35,17 @@ psql -U postgres fix_trading_simulator < database/sample-data.sql
 
 ## 5. Run Services (Development Mode - Recommended)
 
+### Option 0: Windows One-Command Startup
+
+```powershell
+cd c:\Users\Aarav\OneDrive\Desktop\cmltest\fix-trading-simulator
+.\start-local.ps1
+```
+
+This starts services in the right order (exchange first, then broker), and opens front-ends on:
+- Broker UI: http://localhost:4200
+- Exchange UI: http://localhost:4201
+
 ### Option A: Individual Terminals (Easier for Development)
 
 **Terminal 1 - Exchange Back-End (Port 8090)**
@@ -69,6 +80,10 @@ Then open:
 
 ```bash
 # Build and start all services
+docker-compose up -d
+
+# Force fresh images from local source (recommended after code changes)
+docker-compose build --no-cache
 docker-compose up -d
 
 # View logs

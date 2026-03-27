@@ -752,7 +752,12 @@ export class AppComponent implements OnInit, OnDestroy {
       orderType: 'LIMIT',
       status: 'NEW'
     };
-    this.orderService.createOrder(order).subscribe(result => {
+    this.orderService.createOrder(order).pipe(
+      catchError(err => {
+        this.notificationService.error('Quick Buy Failed', err.message || 'Unable to reach broker API');
+        return of(null);
+      })
+    ).subscribe(result => {
       if (result) {
         this.notificationService.success('Quick Buy', `Bought ${qty} ${symbol} @ $${price.toFixed(2)}`);
         this.loadOrders();
@@ -772,7 +777,12 @@ export class AppComponent implements OnInit, OnDestroy {
       orderType: 'LIMIT',
       status: 'NEW'
     };
-    this.orderService.createOrder(order).subscribe(result => {
+    this.orderService.createOrder(order).pipe(
+      catchError(err => {
+        this.notificationService.error('Quick Sell Failed', err.message || 'Unable to reach broker API');
+        return of(null);
+      })
+    ).subscribe(result => {
       if (result) {
         this.notificationService.success('Quick Sell', `Sold ${qty} ${symbol} @ $${price.toFixed(2)}`);
         this.loadOrders();

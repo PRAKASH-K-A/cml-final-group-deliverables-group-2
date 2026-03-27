@@ -1,0 +1,10 @@
+[START] 00:47:43.682 - ========================================
+[START] 00:47:43.684 - CORRECTED VALIDATION TEST SUITE
+[START] 00:47:43.685 - Using FIX Protocol Field Format
+[START] 00:47:43.689 - ========================================
+[PASS] 00:47:43.693 - Backend Health: UP
+[SECTION] 00:47:43.694 - 
+[SECTION] 00:47:43.696 - TEST 0: Verify API Format with Single Order
+[SECTION] 00:47:43.698 - ============================================
+[FAIL] 00:47:43.707 - FAILED: The remote server returned an error: (400) Bad Request.
+[WARN] 00:47:43.709 - API format still incorrect - please verify

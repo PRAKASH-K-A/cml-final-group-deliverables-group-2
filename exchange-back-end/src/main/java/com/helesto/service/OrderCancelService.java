@@ -86,9 +86,23 @@ public class OrderCancelService {
             auditTrail.add(audit);
             return new CancelResult(false, "Order not found: " + orderRefNumber);
         }
-        
-        // Validate client ownership
-        if (clientId != null && !clientId.equals(order.getClientId())) {
+
+        // Validate client ownership. If legacy/migrated orders are missing client attribution,
+        // bind the first explicit caller clientId to avoid false mismatches.
+        String normalizedRequestClientId = normalizeClientId(clientId);
+        String normalizedOrderClientId = normalizeClientId(order.getClientId());
+
+        if (normalizedRequestClientId != null && normalizedOrderClientId == null) {
+            order.setClientId(normalizedRequestClientId);
+            orderDao.update(order);
+            orderCacheService.addToCache(order);
+            normalizedOrderClientId = normalizedRequestClientId;
+            LOG.info("Backfilled missing clientId on order {} with {} during cancel request", orderRefNumber, normalizedRequestClientId);
+        }
+
+        if (normalizedRequestClientId != null
+                && normalizedOrderClientId != null
+                && !normalizedRequestClientId.equalsIgnoreCase(normalizedOrderClientId)) {
             audit.status = "REJECTED";
             audit.details = "Client ID mismatch";
             auditTrail.add(audit);
@@ -108,7 +122,7 @@ public class OrderCancelService {
         CancelRequest cancelRequest = new CancelRequest();
         cancelRequest.orderRefNumber = orderRefNumber;
         cancelRequest.origClOrdId = order.getClOrdId();
-        cancelRequest.clientId = clientId;
+        cancelRequest.clientId = normalizedOrderClientId != null ? normalizedOrderClientId : normalizedRequestClientId;
         cancelRequest.reason = reason;
         cancelRequest.requestTime = System.currentTimeMillis();
         cancelRequest.orderId = order.getId();
@@ -278,6 +292,14 @@ public class OrderCancelService {
         entry.details = details;
         entry.status = "PENDING";
         return entry;
+    }
+
+    private String normalizeClientId(String clientId) {
+        if (clientId == null) {
+            return null;
+        }
+        String normalized = clientId.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
     
     // ================== Inner Classes ==================

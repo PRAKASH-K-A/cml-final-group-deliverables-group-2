@@ -19,12 +19,12 @@ function Write-Header {
 
 function Write-Pass {
     param([string]$text)
-    Write-Host "✓ PASS: $text" -ForegroundColor Green
+    Write-Host "PASS: $text" -ForegroundColor Green
 }
 
 function Write-Fail {
     param([string]$text, [string]$reason = "")
-    $msg = "✗ FAIL: $text"
+    $msg = "FAIL: $text"
     if ($reason) { $msg += " - $reason" }
     Write-Host $msg -ForegroundColor Red
 }
@@ -496,10 +496,10 @@ function Perf-Test-1-Burst {
         Write-Host "  Actual throughput: $([Math]::Round($actualOpsPerSec, 2)) ops/sec" -ForegroundColor Gray
         
         if ($actualOpsPerSec -ge ($expectedOpsPerSec * 0.8)) {
-            Write-Pass "Burst throughput meets requirement (≥$([Math]::Round($expectedOpsPerSec * 0.8, 2)) ops/sec)"
+            Write-Pass "Burst throughput meets requirement (>=$([Math]::Round($expectedOpsPerSec * 0.8, 2)) ops/sec)"
             $script:results.passed++
         } else {
-            Write-Fail "Burst throughput too low" "Expected ≥ $([Math]::Round($expectedOpsPerSec * 0.8, 2)) ops/sec, got $([Math]::Round($actualOpsPerSec, 2))"
+            Write-Fail "Burst throughput too low" "Expected >= $([Math]::Round($expectedOpsPerSec * 0.8, 2)) ops/sec, got $([Math]::Round($actualOpsPerSec, 2))"
             $script:results.failed++
         }
         
@@ -670,10 +670,10 @@ function Perf-Test-4-DBWriteRate {
 # MAIN EXECUTION
 # ==========================================
 
-Write-Host "`n╔════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║     FIX TRADING SIMULATOR - COMPREHENSIVE E2E TEST SUITE     ║" -ForegroundColor Cyan
-Write-Host "║                  6 Test Cases + 4 Performance Tests          ║" -ForegroundColor Cyan
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+Write-Host "`n============================================================" -ForegroundColor Cyan
+Write-Host "FIX TRADING SIMULATOR - COMPREHENSIVE E2E TEST SUITE" -ForegroundColor Cyan
+Write-Host "6 Test Cases + 4 Performance Tests" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
 
 Write-Host "`nBackend URL: $backendUrl`n" -ForegroundColor Gray
 
@@ -712,17 +712,17 @@ Write-Header "TEST SUMMARY"
 
 $total = $results.passed + $results.failed + $results.skipped
 Write-Host "Total Assertions: $total" -ForegroundColor Cyan
-Write-Host "  ✓ Passed: $($results.passed)" -ForegroundColor Green
-Write-Host "  ✗ Failed: $($results.failed)" -ForegroundColor Red
-Write-Host "  ⊘ Skipped: $($results.skipped)" -ForegroundColor Yellow
+Write-Host "  Passed: $($results.passed)" -ForegroundColor Green
+Write-Host "  Failed: $($results.failed)" -ForegroundColor Red
+Write-Host "  Skipped: $($results.skipped)" -ForegroundColor Yellow
 
 $passRate = if ($total -gt 0) { [Math]::Round(($results.passed / $total) * 100, 1) } else { 0 }
 Write-Host "`nPass Rate: $passRate%" -ForegroundColor $(if ($passRate -ge 80) { "Green" } else { "Red" })
 
 if ($results.failed -eq 0) {
-    Write-Host "`n🎉 ALL TESTS PASSED! 🎉`n" -ForegroundColor Green
+    Write-Host "`nALL TESTS PASSED!`n" -ForegroundColor Green
     exit 0
 } else {
-    Write-Host "`n⚠️  SOME TESTS FAILED - Review output above for details`n" -ForegroundColor Red
+    Write-Host "`nSOME TESTS FAILED - Review output above for details`n" -ForegroundColor Red
     exit 1
 }

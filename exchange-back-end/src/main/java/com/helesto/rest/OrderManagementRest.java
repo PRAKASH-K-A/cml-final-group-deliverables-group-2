@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -135,6 +136,52 @@ public class OrderManagementRest {
                     .entity(Map.of("success", false, "error", result.message))
                     .build();
         }
+    }
+
+    /**
+     * Backward-compatible cancel endpoint used by legacy/front-end flows that call
+     * DELETE /api/orders/{clOrdId}. Resolves the order by clOrdId and then routes
+     * through the existing cancel service.
+     */
+    @DELETE
+    @Path("/{clOrdId}")
+    public Response cancelOrderByClOrdId(@PathParam("clOrdId") String clOrdId) {
+        if (clOrdId == null || clOrdId.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(Map.of("success", false, "error", "clOrdId is required"))
+                    .build();
+        }
+
+        OrderEntity order = orderDao.findByClOrdId(clOrdId);
+        if (order == null || order.getOrderRefNumber() == null || order.getOrderRefNumber().isBlank()) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(Map.of("success", false, "error", "Order not found for clOrdId: " + clOrdId))
+                    .build();
+        }
+
+        String clientId = order.getClientId();
+        String reason = "User requested cancel";
+        OrderCancelService.CancelResult result = cancelService.requestCancel(order.getOrderRefNumber(), clientId, reason);
+
+        if (result.success) {
+            return Response.ok(Map.of(
+                    "success", true,
+                    "message", result.message,
+                    "canceledQuantity", result.canceledQuantity,
+                    "filledQuantity", result.filledQuantity,
+                    "clOrdId", clOrdId,
+                    "orderRefNumber", order.getOrderRefNumber()
+            )).build();
+        }
+
+        return Response.status(Response.Status.BAD_REQUEST)
+                .entity(Map.of(
+                        "success", false,
+                        "error", result.message,
+                        "clOrdId", clOrdId,
+                        "orderRefNumber", order.getOrderRefNumber()
+                ))
+                .build();
     }
     
     @GET

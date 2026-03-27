@@ -16,7 +16,10 @@ services:
       - qfj-network
 
   exchange-back-end:
-    image: felipewind/exchange-back-end:1.0
+    build:
+      context: ./exchange-back-end
+      dockerfile: Dockerfile
+    image: fix-trading-simulator/exchange-back-end:local
     container_name: exchange-back-end
     ports:
       - "8090:8090"
@@ -30,7 +33,10 @@ services:
       - qfj-network
 
   broker-back-end:
-    image: felipewind/broker-back-end:1.0
+    build:
+      context: ./broker-back-end
+      dockerfile: Dockerfile
+    image: fix-trading-simulator/broker-back-end:local
     container_name: broker-back-end
     ports:
       - "8080:8080"
@@ -45,7 +51,10 @@ services:
       - qfj-network
 
   exchange-front-end:
-    image: felipewind/exchange-front-end:1.0
+    build:
+      context: ./exchange-front-end
+      dockerfile: Dockerfile
+    image: fix-trading-simulator/exchange-front-end:local
     container_name: exchange-front-end
     ports:
       - "90:80"
@@ -55,7 +64,10 @@ services:
       - qfj-network
 
   broker-front-end:
-    image: felipewind/broker-front-end:1.0
+    build:
+      context: ./broker-front-end
+      dockerfile: Dockerfile
+    image: fix-trading-simulator/broker-front-end:local
     container_name: broker-front-end
     ports:
       - "80:80"
