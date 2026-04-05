@@ -1,0 +1,28 @@
+# ============================================================================
+# T16 ? Cancel Unknown Order (Reject)
+# ============================================================================
+# Validates: Attempting to cancel an order that does not exist results in
+#            an OrderCancelReject (35=9).
+# No prior orders for this symbol.
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Send a cancel request for a non-existent order ---
+# Use a fabricated OrigClOrdID that was never submitted
+Send:OrderCancelRequest:11=$UNIQUE|41=NONEXISTENT_ORDER_999|55=AAPL|54=1|38=100|60=$TIMESTAMP
+
+# Expect OrderCancelReject (35=9)
+# CxlRejReason (102): 1 = Unknown order
+Wait:35=9
+
+Message:T16 PASSED - Cancel of unknown order correctly rejected (35=9)
+
+Save:results\T16_result.txt
+Disconnect

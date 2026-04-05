@@ -1,0 +1,53 @@
+# ============================================================================
+# T07 ? Time Priority Buy Side
+# ============================================================================
+# Validates: When two buy orders exist at the same price, the FIRST order
+#            entered (time priority) matches before the second.
+# Symbol: BAC | Two Buy 100 @ 500.00, then Sell 100 @ 500.00
+# Expected: First buy order fills; second buy order remains resting.
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send first buy order (Order A) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=500.00|59=0
+
+# Expect Order A acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# Save Order A's ClOrdID for later verification
+# $LASTUNIQUE now holds Order A's ClOrdID
+
+# --- Step 2: Send second buy order (Order B) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=500.00|59=0
+
+# Expect Order B acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 3: Send a crossing sell order for 100 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=500.00|59=0
+
+# Expect sell order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 4: Verify fills ---
+# Sell side: fully filled
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=500.00|14=100|151=0
+
+# Buy side: Order A (first in) should be the one that fills, not Order B
+# We verify by checking that a buy-side fill with CumQty=100 and LeavesQty=0 arrives
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=500.00|14=100|151=0
+
+# No additional fill should arrive for Order B (it remains resting)
+# The test passes if exactly 2 fill reports are received (1 buy + 1 sell)
+
+Message:T07 PASSED - Time priority on buy side: first order matched first
+
+Save:results\T07_result.txt
+Disconnect

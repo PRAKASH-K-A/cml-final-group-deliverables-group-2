@@ -1,0 +1,42 @@
+# ============================================================================
+# T05 ? Partial Execution
+# ============================================================================
+# Validates: When a smaller order matches a larger resting order, the smaller
+#            order is fully filled, and the larger order is partially filled
+#            with correct CumQty and LeavesQty.
+# Symbol: AAPL | Sell 500 @ 180.00 (resting), then Buy 200 @ 180.00
+# Expected: Buy fully filled (39=2), Sell partially filled (39=1, LeavesQty=300)
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a limit sell order for 500 (will rest in the book) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=500|44=180.00|59=0
+
+# Expect sell order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=500|14=0|151=500
+
+# --- Step 2: Send a smaller buy order for 200 (triggers partial fill) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=200|44=180.00|59=0
+
+# Expect buy order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=200|14=0|151=200
+
+# --- Step 3: Expect fill reports ---
+
+# Buy side: fully filled (200 of 200)
+Wait:35=8|39=2|55=AAPL|54=1|38=200|32=200|31=180.00|14=200|151=0
+
+# Sell side: partially filled (200 of 500, 300 remaining)
+Wait:35=8|39=1|55=AAPL|54=2|38=500|32=200|31=180.00|14=200|151=300
+
+Message:T05 PASSED - Partial execution with correct CumQty and LeavesQty
+
+Save:results\T05_result.txt
+Disconnect

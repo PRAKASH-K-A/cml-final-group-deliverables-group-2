@@ -150,6 +150,16 @@ public class OrderBookManager {
             lock.writeLock().unlock();
         }
     }
+
+    /**
+     * Rebuild in-memory books from active DB state.
+     * This drops any stale in-memory entries and reloads only active orders.
+     */
+    public synchronized void rebuildFromActiveOrders() {
+        orderBooks.clear();
+        locks.clear();
+        recoverActiveOrders();
+    }
     
     /**
      * Get the best bid price for a symbol

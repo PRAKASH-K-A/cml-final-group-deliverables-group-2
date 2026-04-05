@@ -1,0 +1,3 @@
+# Helper for T31: Submit a new order with random symbol and price
+
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,AMZN,GOOGL,META,TSLA,MA,DIS,BAC]|54=$RNDSTR[1,2]|40=2|38=$RNDNUM[10,200/10]|44=$RNDNUM[50,500/0.25]|59=0

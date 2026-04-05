@@ -1,0 +1,63 @@
+# ============================================================================
+# T06 ? Multiple Partial Fills
+# ============================================================================
+# Validates: A large resting order is filled in multiple partial fills.
+#            CumQty must progress correctly: 300 -> 600 -> 1000.
+# Symbol: AAPL | Buy 1000 @ 140.00 (resting), then Sell 300, Sell 300, Sell 400
+# Expected: Buy side receives 3 partial/fill execution reports
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a large limit buy order (resting) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=1000|44=140.00|59=0
+
+# Expect buy order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=1000|14=0|151=1000
+
+# --- Step 2: First partial fill ? Sell 300 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=300|44=140.00|59=0
+
+# Expect sell ack
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=300|14=0|151=300
+
+# Sell side: fully filled (300 of 300)
+Wait:35=8|39=2|55=AAPL|54=2|38=300|32=300|14=300|151=0
+
+# Buy side: partially filled (300 of 1000, 700 remaining)
+Wait:35=8|39=1|55=AAPL|54=1|38=1000|32=300|14=300|151=700
+
+# --- Step 3: Second partial fill ? Sell 300 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=300|44=140.00|59=0
+
+# Expect sell ack
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=300|14=0|151=300
+
+# Sell side: fully filled
+Wait:35=8|39=2|55=AAPL|54=2|38=300|32=300|14=300|151=0
+
+# Buy side: partially filled (CumQty=600, LeavesQty=400)
+Wait:35=8|39=1|55=AAPL|54=1|38=1000|32=300|14=600|151=400
+
+# --- Step 4: Final fill ? Sell 400 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=400|44=140.00|59=0
+
+# Expect sell ack
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=400|14=0|151=400
+
+# Sell side: fully filled
+Wait:35=8|39=2|55=AAPL|54=2|38=400|32=400|14=400|151=0
+
+# Buy side: fully filled (CumQty=1000, LeavesQty=0)
+Wait:35=8|39=2|55=AAPL|54=1|38=1000|32=400|14=1000|151=0
+
+Message:T06 PASSED - Multiple partial fills with correct CumQty progression (300 -> 600 -> 1000)
+
+Save:results\T06_result.txt
+Disconnect

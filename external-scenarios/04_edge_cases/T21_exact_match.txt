@@ -1,0 +1,32 @@
+# ============================================================================
+# T21 ? Exact Match at Exact Price
+# ============================================================================
+# Validates: Two orders with identical quantity and price fully execute.
+#            Both sides show LeavesQty=0, CumQty=full quantity.
+# Symbol: MA | Buy 100 @ 90.00, Sell 100 @ 90.00
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a limit buy order ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=90.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 2: Send a Matching sell order ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=90.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 3: Both sides fully filled ---
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=90.00|14=100|151=0
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=90.00|14=100|151=0
+
+Message:T21 PASSED - Exact Match at exact price both sides fully filled
+
+Save:results\T21_result.txt
+Disconnect

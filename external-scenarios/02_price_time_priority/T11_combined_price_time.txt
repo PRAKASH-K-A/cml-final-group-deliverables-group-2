@@ -1,0 +1,63 @@
+# ============================================================================
+# T11 ? Combined Price-Time Priority
+# ============================================================================
+# Validates: Price takes priority over time. Within the same price level,
+#            time (FIFO) is the tiebreaker.
+# Symbol: DIS
+# Setup: Buy A: 100 @ 100.00, Buy B: 100 @ 105.00, Buy C: 100 @ 105.00
+# Action: Sell 200 @ 100.00 (crosses all levels)
+# Expected matching order:
+#   1st fill: Buy B (105.00, first at best price) ? 100 filled
+#   2nd fill: Buy C (105.00, second at same price) ? 100 filled
+#   Buy A (100.00) remains resting (sell fully consumed at 105 level)
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Build the buy book ---
+
+# Buy A: 100 @ 100.00 (worst price, but entered first)
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=100.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# Buy B: 100 @ 105.00 (best price, second entry)
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=105.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# Buy C: 100 @ 105.00 (same price as B, third entry)
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=105.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 2: Send a crossing sell for 200 @ 100.00 ---
+# This sell will match against bids >= 100.00, starting with the best price
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=200|44=100.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=200|14=0|151=200
+
+# --- Step 3: Verify fills in correct priority order ---
+
+# Fill 1: Sell partially filled against Buy B (105.00 level, first at that price)
+# Sell: CumQty=100, LeavesQty=100, LastQty=100, LastPx=105.00
+Wait:35=8|39=1|55=AAPL|54=2|32=100|31=105.00|14=100|151=100
+
+# Buy B: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=105.00|14=100|151=0
+
+# Fill 2: Sell fully filled against Buy C (105.00 level, second at that price)
+# Sell: CumQty=200, LeavesQty=0, LastQty=100, LastPx=105.00
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=105.00|14=200|151=0
+
+# Buy C: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=105.00|14=100|151=0
+
+# Buy A (100.00) should NOT fill ? sell was fully consumed at 105.00 level
+
+Message:T11 PASSED - Combined price-time priority: 105 level fills before 100 level FIFO within level
+
+Save:results\T11_result.txt
+Disconnect

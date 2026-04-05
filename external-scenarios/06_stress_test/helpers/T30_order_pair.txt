@@ -1,0 +1,5 @@
+# Helper script for T27: One buy-sell pair for AAPL
+# Sends a buy and a sell at the same price, expects acks and fills
+
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=150.00|59=0
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=150.00|59=0

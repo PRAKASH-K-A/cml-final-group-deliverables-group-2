@@ -1,0 +1,5 @@
+# Helper script for T28: One buy-sell pair across random symbols
+# Random symbol, random price in a narrow range to encourage matching
+
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,AMZN,META,MA,DIS,BAC]|54=1|40=2|38=$RNDNUM[10,500/10]|44=$RNDNUM[100,200/0.25]|59=0
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,AMZN,META,MA,DIS,BAC]|54=2|40=2|38=$RNDNUM[10,500/10]|44=$RNDNUM[100,200/0.25]|59=0

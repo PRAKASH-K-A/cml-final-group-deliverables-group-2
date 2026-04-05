@@ -1,0 +1,42 @@
+# ============================================================================
+# T03 ? Full Execution (Limit vs Limit)
+# ============================================================================
+# Validates: Two crossing limit orders fully execute. Both the resting and
+#            aggressor orders receive fill reports (dual-sided).
+# Symbol: AAPL | Buy 100 @ 150.00, then Sell 100 @ 150.00
+# Expected: Both orders fully filled (OrdStatus=Filled, LeavesQty=0)
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a limit buy order (will rest in the book) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=150.00|59=0
+
+# Expect buy order acknowledged (resting, no match yet)
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 2: Send a crossing limit sell order ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=150.00|59=0
+
+# Expect sell order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 3: Expect fill reports for both sides ---
+# The OMS sends dual-sided fills. Order may vary, so we use Wait.
+
+# Wait for a fill on the sell (aggressor) side: fully filled
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=150.00|14=100|151=0
+
+# Wait for a fill on the buy (resting) side: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=150.00|14=100|151=0
+
+Message:T03 PASSED - Full execution limit vs limit with dual-sided fills
+
+Save:results\T03_result.txt
+Disconnect

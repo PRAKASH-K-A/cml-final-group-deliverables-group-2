@@ -129,7 +129,7 @@ cd ..
 ### Build All (Automated)
 
 ```bash
-./build.sh
+./scripts/build/build.sh
 ```
 
 ## Running the Application

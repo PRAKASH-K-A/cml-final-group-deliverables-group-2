@@ -11,6 +11,7 @@ import com.helesto.dao.OrderDao;
 import com.helesto.model.OrderEntity;
 
 import quickfix.FieldNotFound;
+import quickfix.Message;
 import quickfix.SessionID;
 import quickfix.field.OrdType;
 import quickfix.field.TimeInForce;
@@ -37,11 +38,15 @@ public class QuickFixJOrderIntakeEngine {
     OrderCacheService orderCacheService;
 
     public IntakeResult intake(NewOrderSingle newOrderSingle, SessionID sessionID) throws FieldNotFound {
+        return intake((Message) newOrderSingle, sessionID);
+    }
+
+    public IntakeResult intake(Message newOrderSingle, SessionID sessionID) throws FieldNotFound {
         long startTime = System.nanoTime();
         telemetryService.recordFixMessageReceived();
         telemetryService.recordOrderReceived();
 
-        String clOrdId = newOrderSingle.getClOrdID().getValue();
+        String clOrdId = newOrderSingle.getString(11);
         if (clOrdId == null || clOrdId.isBlank()) {
             telemetryService.recordFixMessageRejected();
             telemetryService.recordOrderRejected();
@@ -54,16 +59,16 @@ public class QuickFixJOrderIntakeEngine {
             return IntakeResult.rejected(clOrdId, "UNKNOWN", '1', 0, "Duplicate ClOrdID");
         }
 
-        String symbol = newOrderSingle.getSymbol().getValue();
-        char side = newOrderSingle.getSide().getValue();
-        double qty = newOrderSingle.getOrderQty().getValue();
-        char ordType = newOrderSingle.getOrdType().getValue();
+        String symbol = newOrderSingle.getString(55);
+        char side = newOrderSingle.getChar(54);
+        double qty = newOrderSingle.getDouble(38);
+        char ordType = newOrderSingle.getChar(40);
 
         double price = 0;
         if (ordType == OrdType.LIMIT || ordType == OrdType.STOP_LIMIT) {
-            try {
-                price = newOrderSingle.getPrice().getValue();
-            } catch (FieldNotFound e) {
+            if (newOrderSingle.isSetField(44)) {
+                price = newOrderSingle.getDouble(44);
+            } else {
                 telemetryService.recordFixMessageRejected();
                 telemetryService.recordOrderRejected();
                 return IntakeResult.rejected(clOrdId, symbol, side, qty, "Price required for LIMIT orders");
@@ -71,11 +76,9 @@ public class QuickFixJOrderIntakeEngine {
         }
 
         String timeInForce = "DAY";
-        try {
-            char tif = newOrderSingle.getTimeInForce().getValue();
+        if (newOrderSingle.isSetField(59)) {
+            char tif = newOrderSingle.getChar(59);
             timeInForce = mapTimeInForce(tif);
-        } catch (FieldNotFound ignored) {
-            // Default to DAY
         }
 
         OrderEntity order = new OrderEntity();

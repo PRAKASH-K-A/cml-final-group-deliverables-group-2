@@ -1,0 +1,28 @@
+# ============================================================================
+# T28 - Logon / Logoff
+# ============================================================================
+# Validates: OMS properly handles the FIX session lifecycle.
+#            1. Connect and receive Logon ack (35=A)
+#            2. Send Logout (35=5) and receive Logout ack (35=5)
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Step 1: Expect Logon acknowledgment from OMS
+Wait:35=A
+
+Message:T28 Logon successful
+
+# Step 2: Send Logout request
+Send:Logout:
+
+# Step 3: Expect Logout acknowledgment
+Wait:35=5
+
+Message:T28 PASSED - Logon/Logout handshake completed successfully
+
+Save:results\T28_result.txt
+Disconnect

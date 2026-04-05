@@ -454,18 +454,35 @@ public class OrderManagementRest {
         } else if (request.clientId != null && !request.clientId.isEmpty()) {
             orders = orderDao.findByClientId(request.clientId);
         } else {
-            orders = orderDao.findByStatus("NEW");
+            // Default bulk cleanup should target all active states, not only NEW.
+            java.util.LinkedHashMap<String, com.helesto.model.OrderEntity> byRef = new java.util.LinkedHashMap<>();
+            for (com.helesto.model.OrderEntity o : orderDao.findByStatus("NEW")) {
+                byRef.put(o.getOrderRefNumber(), o);
+            }
+            for (com.helesto.model.OrderEntity o : orderDao.findByStatus("PARTIALLY_FILLED")) {
+                byRef.put(o.getOrderRefNumber(), o);
+            }
+            for (com.helesto.model.OrderEntity o : orderDao.findByStatus("PARTIAL_FILL")) {
+                byRef.put(o.getOrderRefNumber(), o);
+            }
+            orders = new java.util.ArrayList<>(byRef.values());
         }
 
         for (com.helesto.model.OrderEntity o : orders) {
-                if ("NEW".equals(o.getStatus()) || "PARTIALLY_FILLED".equals(o.getStatus())
-                    || "PARTIAL_FILL".equals(o.getStatus())) {
+            if ("NEW".equals(o.getStatus()) || "PARTIALLY_FILLED".equals(o.getStatus())
+                || "PARTIAL_FILL".equals(o.getStatus())) {
+                String effectiveClientId = (o.getClientId() != null && !o.getClientId().isBlank())
+                    ? o.getClientId()
+                    : requestClientId;
                 OrderCancelService.CancelResult r = cancelService.requestCancel(
-                        o.getOrderRefNumber(), requestClientId, reason);
+                    o.getOrderRefNumber(), effectiveClientId, reason);
                 if (r.success) canceledCount++;
                 else { failedCount++; errors.add(o.getOrderRefNumber() + ": " + r.message); }
             }
         }
+
+        // Keep in-memory books aligned with DB active state to remove stale ghost levels.
+        orderBookManager.rebuildFromActiveOrders();
 
         return Response.ok(Map.of(
                 "canceledCount", canceledCount,

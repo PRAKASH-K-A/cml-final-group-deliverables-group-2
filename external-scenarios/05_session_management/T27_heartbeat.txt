@@ -1,0 +1,26 @@
+# ============================================================================
+# T27 - Heartbeat Negotiation
+# ============================================================================
+# Validates: OMS negotiates HeartBtInt during logon. The Logon ack (35=A)
+#            must contain a HeartBtInt (108) value, confirming the OMS
+#            supports heartbeat management.
+# Note: TestRequest/Heartbeat exchange cannot be tested in MiniFIX batch mode
+#       because MiniFIX handles heartbeats internally without logging them.
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Step 1: Expect Logon acknowledgment with HeartBtInt
+Wait:35=A|108=30
+
+# Step 2: Verify session is functional by sending an order and getting ack
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=50|44=100.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1
+
+Message:T27 PASSED - Heartbeat negotiated (HeartBtInt=30) and session functional
+
+Save:results\T27_result.txt
+Disconnect

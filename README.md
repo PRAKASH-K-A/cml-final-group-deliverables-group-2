@@ -33,6 +33,12 @@ The architecture consists of:
 
 ```
 fix-trading-simulator/
+├── scripts/
+│   ├── build/
+│   ├── debug/
+│   ├── ops/
+│   ├── tests/
+│   └── validation/
 ├── exchange-back-end/
 ├── exchange-front-end/
 ├── broker-back-end/
@@ -97,8 +103,8 @@ After start, access project at:
 
 Inside the root folder of the project, execute:
 ```
-$ chmod +x ./run-from-docker-hub.sh
-$ ./run-from-docker-hub.sh
+$ chmod +x ./scripts/build/run-from-docker-hub.sh
+$ ./scripts/build/run-from-docker-hub.sh
 ```
 
 Docker Hub images:

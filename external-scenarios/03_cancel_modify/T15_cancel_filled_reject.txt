@@ -1,0 +1,47 @@
+# ============================================================================
+# T15 ? Cancel Fully Filled Order (Reject)
+# ============================================================================
+# Validates: Attempting to cancel a fully filled order results in an
+#            OrderCancelReject (35=9). The OMS must not allow cancellation
+#            of completed orders.
+# Symbol: MA | Buy 100 @ 520.00, Sell 100 @ 520.00 (full fill), then cancel buy
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a limit sell order (rests in book) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=520.00|59=0
+
+# Expect sell order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 2: Send a crossing buy order to fully fill the sell ---
+# Buy is sent last so $LASTOUT[D,11] correctly resolves to the buy's ClOrdID
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=520.00|59=0
+
+# Expect buy order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# Wait for fills on both sides
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=520.00|14=100|151=0
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=520.00|14=100|151=0
+
+# --- Step 3: Attempt to cancel the already-filled buy order ---
+# $LASTOUT[D,11] = ClOrdID of the buy (last sent NewOrderSingle)
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTOUT[D,11]|55=AAPL|54=1|38=100|60=$TIMESTAMP
+
+# Expect OrderCancelReject (35=9)
+# OrdStatus = 8 (Rejected) — OMS uses 39=8 for all cancel rejects on terminal orders
+# CxlRejReason (102): 0 = TooLateToCancel
+Wait:35=9|39=8
+
+Message:T15 PASSED - Cancel of fully filled order correctly rejected (35=9)
+
+Save:results\T15_result.txt
+Disconnect

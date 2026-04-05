@@ -1,0 +1,52 @@
+# ============================================================================
+# T10 ? Price Priority Sell Side
+# ============================================================================
+# Validates: When two sell orders exist at different prices, the order with
+#            the LOWER ask price matches first (better price = lower for sells).
+# Symbol: BAC | Sell 100 @ 200.00 (A), Sell 100 @ 195.00 (B), Buy 100 @ 200.00
+# Expected: Order B fills (195 < 200), Order A stays resting.
+#           Fill price = 195.00 (resting order B's price, best offer).
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send sell order A at 200.00 (higher ask) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=200.00|59=0
+
+# Expect Order A acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 2: Send sell order B at 195.00 (lower ask ? better price) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=195.00|59=0
+
+# Expect Order B acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 3: Send a crossing buy order at 200.00 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=200.00|59=0
+
+# Expect buy order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 4: Verify fills ---
+# The buy should match against Order B (best offer at 195.00)
+# Fill price = 195.00 (resting order's price)
+
+# Buy side: fully filled at 195.00
+Wait:35=8|39=2|55=AAPL|54=1|32=100|14=100|151=0
+
+# Sell side (Order B): fully filled at 195.00
+Wait:35=8|39=2|55=AAPL|54=2|32=100|14=100|151=0
+
+# Order A should NOT fill (remains resting at 200.00)
+
+Message:T10 PASSED - Price priority on sell side: lower ask (195) matched before higher ask (200)
+
+Save:results\T10_result.txt
+Disconnect

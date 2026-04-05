@@ -1,0 +1,46 @@
+# ============================================================================
+# T08 ? Time Priority Sell Side
+# ============================================================================
+# Validates: When two sell orders exist at the same price, the FIRST sell
+#            order entered (time priority) matches before the second.
+# Symbol: DIS | Two Sell 100 @ 250.00, then Buy 100 @ 250.00
+# Expected: First sell order fills; second sell order remains resting.
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send first sell order (Order A) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=250.00|59=0
+
+# Expect Order A acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 2: Send second sell order (Order B) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=100|44=250.00|59=0
+
+# Expect Order B acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=100|14=0|151=100
+
+# --- Step 3: Send a crossing buy order for 100 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=250.00|59=0
+
+# Expect buy order acknowledged
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 4: Verify fills ---
+# Buy side: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=250.00|14=100|151=0
+
+# Sell side: Order A (first in) fills, not Order B
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=250.00|14=100|151=0
+
+Message:T08 PASSED - Time priority on sell side: first order matched first
+
+Save:results\T08_result.txt
+Disconnect

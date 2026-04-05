@@ -1,0 +1,39 @@
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+Wait:35=A
+# Clear AAPL buy side: sell at 0.01 to match all resting buys
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=999999|44=0.01|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=AAPL|54=2|38=999999|60=$TIMESTAMP
+Sleep:1000
+# Clear AAPL sell side: buy at 999999 to match all resting sells
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=999999|44=999999.00|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=AAPL|54=1|38=999999|60=$TIMESTAMP
+Sleep:1000
+# Clear MSFT buy side
+Send:NewOrderSingle:11=$UNIQUE|55=MSFT|54=2|40=2|38=999999|44=0.01|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=MSFT|54=2|38=999999|60=$TIMESTAMP
+Sleep:1000
+# Clear MSFT sell side
+Send:NewOrderSingle:11=$UNIQUE|55=MSFT|54=1|40=2|38=999999|44=999999.00|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=MSFT|54=1|38=999999|60=$TIMESTAMP
+Sleep:1000
+# Clear ORCL buy side
+Send:NewOrderSingle:11=$UNIQUE|55=ORCL|54=2|40=2|38=999999|44=0.01|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=ORCL|54=2|38=999999|60=$TIMESTAMP
+Sleep:1000
+# Clear ORCL sell side
+Send:NewOrderSingle:11=$UNIQUE|55=ORCL|54=1|40=2|38=999999|44=999999.00|59=0
+Sleep:1000
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=ORCL|54=1|38=999999|60=$TIMESTAMP
+Sleep:1000
+
+Message:CLEANUP PASSED
+Save:results\cleanup_result.txt
+Disconnect

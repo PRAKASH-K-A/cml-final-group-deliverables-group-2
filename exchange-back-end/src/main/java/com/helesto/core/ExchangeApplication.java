@@ -1,6 +1,5 @@
 package com.helesto.core;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,11 +19,9 @@ import org.slf4j.LoggerFactory;
 import com.helesto.dao.OrderDao;
 import com.helesto.model.OrderEntity;
 import com.helesto.service.ExecutionReportService;
-import com.helesto.service.MatchingEngine;
-import com.helesto.service.OrderBookManager;
+import com.helesto.service.FixOrderManagementEngine;
 import com.helesto.service.QuickFixJOrderIntakeEngine;
 import com.helesto.service.TelemetryService;
-import com.helesto.service.TradeService;
 
 import quickfix.Application;
 import quickfix.DoNotSend;
@@ -54,6 +51,7 @@ import quickfix.field.OrdStatus;
 import quickfix.field.OrderID;
 import quickfix.field.OrderQty;
 import quickfix.field.OrigClOrdID;
+import quickfix.field.Price;
 import quickfix.field.RawData;
 import quickfix.field.RefMsgType;
 import quickfix.field.RefSeqNum;
@@ -83,20 +81,14 @@ public class ExchangeApplication extends MessageCracker implements Application {
     QuickFixJOrderIntakeEngine quickFixJOrderIntakeEngine;
 
     @Inject
-    MatchingEngine matchingEngine;
-
-    @Inject
-    OrderBookManager orderBookManager;
-
-    @Inject
-    TradeService tradeService;
-
-    @Inject
     TelemetryService telemetryService;
 
-    private final ExecutorService asyncExecutor = new ThreadPoolExecutor(
-            2,
-            4,
+    @Inject
+    FixOrderManagementEngine fixOrderManagementEngine;
+
+        private final ExecutorService asyncExecutor = new ThreadPoolExecutor(
+            1,
+            1,
             60,
             TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(10000),
@@ -221,6 +213,24 @@ public class ExchangeApplication extends MessageCracker implements Application {
         if (telemetryService != null) {
             telemetryService.recordFixMessageReceived();
         }
+
+        if (MsgType.ORDER_SINGLE.equals(msgType)) {
+            LOG.info("Dispatching generic NewOrderSingle to async gateway worker");
+            asyncExecutor.submit(() -> processNewOrderSingleAsync(message, sessionID));
+            return;
+        }
+
+        if (MsgType.ORDER_CANCEL_REQUEST.equals(msgType)) {
+            LOG.info("Processing generic OrderCancelRequest");
+            processOrderCancelRequest(message, sessionID);
+            return;
+        }
+
+        if (MsgType.ORDER_CANCEL_REPLACE_REQUEST.equals(msgType)) {
+            LOG.info("Processing generic OrderCancelReplaceRequest");
+            processOrderCancelReplaceRequest(message, sessionID);
+            return;
+        }
         
         try {
             crack(message, sessionID);
@@ -275,6 +285,66 @@ public class ExchangeApplication extends MessageCracker implements Application {
         }
     }
 
+    private void processNewOrderSingleAsync(Message newOrderSingle, SessionID sessionID) {
+        long orderStartTime = System.nanoTime();
+
+        if (telemetryService != null) {
+            telemetryService.recordOrderReceived();
+        }
+
+        try {
+            QuickFixJOrderIntakeEngine.IntakeResult intakeResult = quickFixJOrderIntakeEngine.intake(newOrderSingle, sessionID);
+            routeIntakeResult(intakeResult, sessionID, orderStartTime);
+        } catch (Exception e) {
+            LOG.error("Error processing generic NewOrderSingle asynchronously", e);
+            if (telemetryService != null) {
+                telemetryService.recordError();
+            }
+            try {
+                String clOrdId = newOrderSingle.getString(ClOrdID.FIELD);
+                sendRejectExecutionReport(clOrdId, "UNKNOWN", Side.BUY, 0, OrdRejReason.OTHER,
+                        "Internal error: " + e.getMessage(), sessionID);
+            } catch (FieldNotFound ex) {
+                LOG.error("Cannot extract ClOrdID for reject", ex);
+            }
+        }
+    }
+
+    private void processOrderCancelRequest(Message orderCancelRequest, SessionID sessionID) {
+        try {
+            String origClOrdId = orderCancelRequest.getString(OrigClOrdID.FIELD);
+            String clOrdId = orderCancelRequest.getString(ClOrdID.FIELD);
+
+            FixOrderManagementEngine.CancelResult cancelResult = fixOrderManagementEngine.cancel(origClOrdId);
+            if (cancelResult.notFound) {
+                LOG.warn("Order not found for cancel: {}", origClOrdId);
+                sendCancelReject(clOrdId, origClOrdId, "UNKNOWN", CxlRejReason.UNKNOWN_ORDER,
+                        cancelResult.reason, sessionID);
+                return;
+            }
+
+            if (cancelResult.tooLate) {
+                LOG.warn("Cannot cancel order in status: {}", cancelResult.order.getStatus());
+                sendCancelReject(clOrdId, origClOrdId, cancelResult.order.getOrderRefNumber(),
+                        CxlRejReason.TOO_LATE_TO_CANCEL, cancelResult.reason, sessionID);
+                return;
+            }
+
+            if (cancelResult.pending) {
+                sendCancelReject(clOrdId, origClOrdId, cancelResult.order.getOrderRefNumber(),
+                        CxlRejReason.ORDER_ALREADY_IN_PENDING_CANCEL_OR_PENDING_REPLACE_STATUS,
+                        cancelResult.reason, sessionID);
+                return;
+            }
+
+            LOG.info("Order canceled: {}", origClOrdId);
+            addSessionEvent("ORDER_CANCELED", "Order " + origClOrdId + " canceled");
+            executionReportService.sendCancel(cancelResult.order, sessionID);
+        } catch (Exception e) {
+            LOG.error("Error processing generic OrderCancelRequest", e);
+        }
+    }
+
     private void routeIntakeResult(QuickFixJOrderIntakeEngine.IntakeResult intakeResult,
                                    SessionID sessionID,
                                    long orderStartTime) throws SessionNotFound {
@@ -304,7 +374,7 @@ public class ExchangeApplication extends MessageCracker implements Application {
         }
 
         executionReportService.sendAck(order, sessionID);
-        processOrderMatch(order, sessionID);
+        fixOrderManagementEngine.processOrderMatch(order, sessionID);
     }
 
     /**
@@ -317,51 +387,82 @@ public class ExchangeApplication extends MessageCracker implements Application {
         try {
             String origClOrdId = orderCancelRequest.getOrigClOrdID().getValue();
             String clOrdId = orderCancelRequest.getClOrdID().getValue();
-            String symbol = orderCancelRequest.getSymbol().getValue();
-            char side = orderCancelRequest.getSide().getValue();
-            
-            // Find the original order
-            OrderEntity order = orderDao.findByClOrdId(origClOrdId);
-            if (order == null) {
+
+            FixOrderManagementEngine.CancelResult cancelResult = fixOrderManagementEngine.cancel(origClOrdId);
+            if (cancelResult.notFound) {
                 LOG.warn("Order not found for cancel: {}", origClOrdId);
-                sendCancelReject(clOrdId, origClOrdId, "UNKNOWN", CxlRejReason.UNKNOWN_ORDER, 
-                        "Order not found", sessionID);
+                sendCancelReject(clOrdId, origClOrdId, "UNKNOWN", CxlRejReason.UNKNOWN_ORDER,
+                        cancelResult.reason, sessionID);
                 return;
             }
-            
-            // Check if order can be canceled
-            String status = order.getStatus();
-            if ("FILLED".equals(status) || "CANCELED".equals(status) || "REJECTED".equals(status)) {
-                LOG.warn("Cannot cancel order in status: {}", status);
-                sendCancelReject(clOrdId, origClOrdId, order.getOrderRefNumber(), 
-                        CxlRejReason.TOO_LATE_TO_CANCEL, "Order already " + status, sessionID);
+
+            if (cancelResult.tooLate) {
+                LOG.warn("Cannot cancel order in status: {}", cancelResult.order.getStatus());
+                sendCancelReject(clOrdId, origClOrdId, cancelResult.order.getOrderRefNumber(),
+                        CxlRejReason.TOO_LATE_TO_CANCEL, cancelResult.reason, sessionID);
                 return;
             }
-            
-            // Check if order is pending cancel
-            if ("PENDING_CANCEL".equals(status)) {
-                sendCancelReject(clOrdId, origClOrdId, order.getOrderRefNumber(),
+
+            if (cancelResult.pending) {
+                sendCancelReject(clOrdId, origClOrdId, cancelResult.order.getOrderRefNumber(),
                         CxlRejReason.ORDER_ALREADY_IN_PENDING_CANCEL_OR_PENDING_REPLACE_STATUS,
-                        "Order already pending cancel", sessionID);
+                        cancelResult.reason, sessionID);
                 return;
             }
-            
-            // Remove from order book
-            orderBookManager.removeOrder(order.getSymbol(), order.getOrderRefNumber());
-            
-            // Update order status
-            order.setStatus("CANCELED");
-            order.setUpdatedAt(LocalDateTime.now());
-            orderDao.updateOrder(order);
             
             LOG.info("Order canceled: {}", origClOrdId);
             addSessionEvent("ORDER_CANCELED", "Order " + origClOrdId + " canceled");
             
             // Send CANCELED execution report
-            executionReportService.sendCancel(order, sessionID);
+            executionReportService.sendCancel(cancelResult.order, sessionID);
             
         } catch (Exception e) {
             LOG.error("Error processing OrderCancelRequest", e);
+        }
+    }
+
+    private void processOrderCancelReplaceRequest(Message replaceRequest, SessionID sessionID) {
+        try {
+            String origClOrdId = replaceRequest.getString(OrigClOrdID.FIELD);
+            String clOrdId = replaceRequest.getString(ClOrdID.FIELD);
+
+            Double newQty = null;
+            Double newPrice = null;
+            try {
+                newQty = replaceRequest.getDouble(OrderQty.FIELD);
+            } catch (FieldNotFound ignored) {
+                // Keep original qty
+            }
+            try {
+                newPrice = replaceRequest.getDouble(Price.FIELD);
+            } catch (FieldNotFound ignored) {
+                // Keep original price
+            }
+
+            FixOrderManagementEngine.ReplaceResult replaceResult =
+                    fixOrderManagementEngine.replace(origClOrdId, clOrdId, newQty, newPrice);
+
+            if (replaceResult.notFound) {
+                LOG.warn("Order not found for replace: {}", origClOrdId);
+                sendCancelReject(clOrdId, origClOrdId, "UNKNOWN", CxlRejReason.UNKNOWN_ORDER,
+                        "Order not found", sessionID);
+                return;
+            }
+
+            if (replaceResult.tooLate) {
+                sendCancelReject(clOrdId, origClOrdId, replaceResult.order.getOrderRefNumber(),
+                        CxlRejReason.TOO_LATE_TO_CANCEL, replaceResult.reason, sessionID);
+                return;
+            }
+
+            LOG.info("Order replaced: {} -> {}", origClOrdId, clOrdId);
+            addSessionEvent("ORDER_REPLACED", "Order " + origClOrdId + " replaced with " + clOrdId);
+
+            executionReportService.sendReplace(replaceResult.order, origClOrdId, sessionID);
+            fixOrderManagementEngine.processOrderMatch(replaceResult.order, sessionID);
+
+        } catch (Exception e) {
+            LOG.error("Error processing OrderCancelReplaceRequest", e);
         }
     }
 
@@ -375,56 +476,44 @@ public class ExchangeApplication extends MessageCracker implements Application {
         try {
             String origClOrdId = replaceRequest.getOrigClOrdID().getValue();
             String clOrdId = replaceRequest.getClOrdID().getValue();
-            
-            // Find the original order
-            OrderEntity order = orderDao.findByClOrdId(origClOrdId);
-            if (order == null) {
+
+            Double newQty = null;
+            Double newPrice = null;
+            try {
+                newQty = replaceRequest.getOrderQty().getValue();
+            } catch (FieldNotFound ignored) {
+                // Keep original qty
+            }
+            try {
+                newPrice = replaceRequest.getPrice().getValue();
+            } catch (FieldNotFound ignored) {
+                // Keep original price
+            }
+
+            FixOrderManagementEngine.ReplaceResult replaceResult =
+                    fixOrderManagementEngine.replace(origClOrdId, clOrdId, newQty, newPrice);
+
+            if (replaceResult.notFound) {
                 LOG.warn("Order not found for replace: {}", origClOrdId);
                 sendCancelReject(clOrdId, origClOrdId, "UNKNOWN", CxlRejReason.UNKNOWN_ORDER,
                         "Order not found", sessionID);
                 return;
             }
-            
-            // Check if order can be modified
-            String status = order.getStatus();
-            if ("FILLED".equals(status) || "CANCELED".equals(status) || "REJECTED".equals(status)) {
-                sendCancelReject(clOrdId, origClOrdId, order.getOrderRefNumber(),
-                        CxlRejReason.TOO_LATE_TO_CANCEL, "Order already " + status, sessionID);
+
+            if (replaceResult.tooLate) {
+                sendCancelReject(clOrdId, origClOrdId, replaceResult.order.getOrderRefNumber(),
+                        CxlRejReason.TOO_LATE_TO_CANCEL, replaceResult.reason, sessionID);
                 return;
             }
-            
-            // Remove old order from book
-            orderBookManager.removeOrder(order.getSymbol(), order.getOrderRefNumber());
-            
-            // Update order with new values
-            try {
-                double newQty = replaceRequest.getOrderQty().getValue();
-                order.setQuantity((long) newQty);
-                order.setLeavesQty((long) newQty - order.getFilledQty());
-            } catch (FieldNotFound e) {
-                // Keep original qty
-            }
-            
-            try {
-                double newPrice = replaceRequest.getPrice().getValue();
-                order.setPrice(newPrice);
-            } catch (FieldNotFound e) {
-                // Keep original price
-            }
-            
-            order.setClOrdId(clOrdId); // Update to new ClOrdID
-            order.setStatus("NEW");
-            order.setUpdatedAt(LocalDateTime.now());
-            orderDao.updateOrder(order);
             
             LOG.info("Order replaced: {} -> {}", origClOrdId, clOrdId);
             addSessionEvent("ORDER_REPLACED", "Order " + origClOrdId + " replaced with " + clOrdId);
             
             // Send REPLACED execution report
-            executionReportService.sendReplace(order, origClOrdId, sessionID);
+            executionReportService.sendReplace(replaceResult.order, origClOrdId, sessionID);
             
             // Re-process through matching
-            processOrderMatch(order, sessionID);
+            fixOrderManagementEngine.processOrderMatch(replaceResult.order, sessionID);
             
         } catch (Exception e) {
             LOG.error("Error processing OrderCancelReplaceRequest", e);
@@ -459,86 +548,6 @@ public class ExchangeApplication extends MessageCracker implements Application {
     }
 
     // Helper methods for message processing
-
-    private void processOrderMatch(OrderEntity order, SessionID sessionID) {
-        try {
-            // Create book order from entity
-            OrderBookManager.BookOrder bookOrder = new OrderBookManager.BookOrder();
-            bookOrder.orderId = order.getOrderRefNumber();
-            bookOrder.clOrdId = order.getClOrdId();
-            bookOrder.symbol = order.getSymbol();
-            bookOrder.side = order.getSide();
-            bookOrder.price = order.getPrice();
-            bookOrder.originalQty = order.getQuantity().intValue();
-            bookOrder.leavesQty = order.getLeavesQty() != null ? order.getLeavesQty().intValue() : bookOrder.originalQty;
-            bookOrder.orderType = order.getOrderType();
-            bookOrder.timeInForce = order.getTimeInForce();
-            bookOrder.clientId = order.getClientId();
-            bookOrder.timestamp = System.currentTimeMillis();
-            
-            // Process through matching engine
-            MatchingEngine.MatchResult result = matchingEngine.matchOrder(bookOrder);
-            
-            // Process fills
-            if (result.filledQty > 0) {
-                order.setFilledQty((long) result.filledQty);
-                order.setLeavesQty((long) result.leavesQty);
-                
-                // Calculate average price
-                double totalValue = 0;
-                for (MatchingEngine.Fill fill : result.fills) {
-                    totalValue += fill.price * fill.quantity;
-                    
-                    // Create trade record - this records trade for both sides
-                    tradeService.createTrade(fill, order.getOrderRefNumber(), order.getClOrdId(),
-                            order.getClientId(), order.getSide(), order.getSymbol());
-                    
-                    // Send fill to contra order (resting order in book)
-                    sendContraFill(fill, order.getSide(), sessionID);
-                }
-                order.setAvgPrice(totalValue / result.filledQty);
-                
-                // Update status
-                if (result.leavesQty == 0) {
-                    order.setStatus("FILLED");
-                    if (telemetryService != null) {
-                        telemetryService.recordOrderFilled();
-                    }
-                } else {
-                    order.setStatus("PARTIALLY_FILLED");
-                }
-                
-                order.setUpdatedAt(LocalDateTime.now());
-                orderDao.updateOrder(order);
-                
-                // Send fill execution report for incoming order
-                for (MatchingEngine.Fill fill : result.fills) {
-                    executionReportService.sendFill(order, fill, sessionID);
-                }
-                
-                addSessionEvent("ORDER_FILLED", "Order " + order.getClOrdId() + 
-                        " filled qty=" + result.filledQty + " @ " + order.getAvgPrice());
-            }
-            
-            // If added to book
-            if (result.addedToBook) {
-                LOG.info("Order {} added to book with leaves qty {}", 
-                        order.getClOrdId(), result.leavesQty);
-            }
-            
-        } catch (Exception e) {
-            LOG.error("Error in matching process", e);
-        }
-    }
-
-    /**
-     * Send fill execution report to the contra (resting) order
-     * Delegates to ExecutionReportService for transactional handling
-     */
-    private void sendContraFill(MatchingEngine.Fill fill, String incomingSide, SessionID sessionID) {
-        // Delegate to transactional service method
-        executionReportService.processContraFill(fill, sessionID);
-    }
 
     private void validateLogon(Message message, SessionID sessionID) throws RejectLogon {
         // Add custom logon validation here if needed

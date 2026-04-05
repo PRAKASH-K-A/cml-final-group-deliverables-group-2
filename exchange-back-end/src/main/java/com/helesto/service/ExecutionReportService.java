@@ -106,6 +106,8 @@ public class ExecutionReportService {
         ExecutionReport report = createBaseReport(order);
         report.set(new ExecType(ExecType.CANCELED));
         report.set(new OrdStatus(OrdStatus.CANCELED));
+        report.set(new CumQty(order.getFilledQty() != null ? order.getFilledQty() : 0L));
+        report.set(new LeavesQty(0));
         report.set(new LastQty(0));
         report.set(new LastPx(0));
         
@@ -121,7 +123,7 @@ public class ExecutionReportService {
         
         ExecutionReport report = createBaseReport(order);
         report.set(new ExecType(ExecType.REPLACED));
-        report.set(new OrdStatus(OrdStatus.NEW)); // New status after replace
+        report.set(new OrdStatus(OrdStatus.REPLACED));
         report.set(new OrigClOrdID(origClOrdId));
         report.set(new LastQty(0));
         report.set(new LastPx(0));
@@ -205,17 +207,30 @@ public class ExecutionReportService {
             LOG.info("Contra order {} updated - filled {} @ {}, status={}", 
                     contraOrder.getClOrdId(), fill.quantity, fill.price, contraOrder.getStatus());
             
-            // Send fill execution report for contra order if it's a FIX order
-            if (contraOrder.getSenderCompId() != null && contraOrder.getTargetCompId() != null) {
-                // Construct the correct session ID for the contra order
-                // Note: For contra order, we need to swap sender/target (we are sending TO the original sender)
-                SessionID contraSessionID = new SessionID(
-                        "FIX.4.4",
-                        contraOrder.getTargetCompId(),  // Our side (exchange)
-                        contraOrder.getSenderCompId()   // Their side (broker)
-                );
+            // For most simulator scenarios both sides are on the same FIX session.
+            if (sessionID != null) {
                 try {
-                    sendFill(contraOrder, fill, contraSessionID);
+                    sendFill(contraOrder, fill, sessionID);
+                    return;
+                } catch (SessionNotFound e) {
+                    LOG.debug("Active session not found for contra fill, trying derived session IDs");
+                }
+            }
+
+            if (contraOrder.getSenderCompId() != null && contraOrder.getTargetCompId() != null) {
+                String beginString = sessionID != null ? sessionID.getBeginString() : "FIX.4.4";
+                SessionID primary = new SessionID(beginString, contraOrder.getSenderCompId(), contraOrder.getTargetCompId());
+                SessionID fallback = new SessionID(beginString, contraOrder.getTargetCompId(), contraOrder.getSenderCompId());
+
+                try {
+                    sendFill(contraOrder, fill, primary);
+                    return;
+                } catch (SessionNotFound ignored) {
+                    // Try alternate direction next.
+                }
+
+                try {
+                    sendFill(contraOrder, fill, fallback);
                 } catch (SessionNotFound e) {
                     LOG.warn("Session not found for contra order {}, skipping FIX message", contraOrder.getClOrdId());
                 }

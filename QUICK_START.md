@@ -25,7 +25,7 @@ psql -U postgres fix_trading_simulator < database/sample-data.sql
 
 ## 4. Build All Components
 ```bash
-./build.sh
+./scripts/build/build.sh
 # OR build individually:
 # cd exchange-back-end && ./mvnw clean package
 # cd broker-back-end && ./mvnw clean package
@@ -39,7 +39,7 @@ psql -U postgres fix_trading_simulator < database/sample-data.sql
 
 ```powershell
 cd c:\Users\Aarav\OneDrive\Desktop\cmltest\fix-trading-simulator
-.\start-local.ps1
+.\scripts\ops\start-local.ps1
 ```
 
 This starts services in the right order (exchange first, then broker), and opens front-ends on:
@@ -192,7 +192,7 @@ fix-trading-simulator/
 ```bash
 # In project root
 docker-compose down -v    # Clean volumes if needed
-./build.sh
+./scripts/build/build.sh
 docker-compose up -d
 ```
 

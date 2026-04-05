@@ -47,9 +47,9 @@ public class SessionSettingsFactory {
                 "ValidateFieldsHaveValues=Y\n" +
                 "AllowUnknownMsgFields=Y\n" +
                 "RefreshOnLogon=Y\n" +
-                "ResetOnLogon=N\n" +
+                "ResetOnLogon=Y\n" +
                 "ResetOnLogout=Y\n" +
-                "ResetOnDisconnect=N\n" +
+                "ResetOnDisconnect=Y\n" +
                 "SendRedundantResendRequests=Y\n" +
                 "PersistMessages=Y\n" +
                 "LogonTimeout=30\n" +
@@ -77,9 +77,41 @@ public class SessionSettingsFactory {
                 "BeginString=FIX.4.4\n" +
                 "SenderCompID=EXCHANGE\n" +
                 "TargetCompID=MINIFIX-J\n" +
+                "SocketAcceptPort=" + quickfixPort + "\n" +
+                "\n" +
+                "[SESSION]\n" +
+                "BeginString=FIX.4.2\n" +
+                "SenderCompID=EXCHANGE\n" +
+                "TargetCompID=BROKER\n" +
+                "UseDataDictionary=N\n" +
+                "ValidateSequenceNumbers=N\n" +
+                "SocketAcceptPort=" + quickfixPort + "\n" +
+                "\n" +
+                "[SESSION]\n" +
+                "BeginString=FIX.4.2\n" +
+                "SenderCompID=EXCHANGE\n" +
+                "TargetCompID=MINIFIX\n" +
+                "UseDataDictionary=N\n" +
+                "ValidateSequenceNumbers=N\n" +
+                "SocketAcceptPort=" + quickfixPort + "\n" +
+                "\n" +
+                "[SESSION]\n" +
+                "BeginString=FIX.4.2\n" +
+                "SenderCompID=EXCHANGE\n" +
+                "TargetCompID=MINIFIXJ\n" +
+                "UseDataDictionary=N\n" +
+                "ValidateSequenceNumbers=N\n" +
+                "SocketAcceptPort=" + quickfixPort + "\n" +
+                "\n" +
+                "[SESSION]\n" +
+                "BeginString=FIX.4.2\n" +
+                "SenderCompID=EXCHANGE\n" +
+                "TargetCompID=MINIFIX-J\n" +
+                "UseDataDictionary=N\n" +
+                "ValidateSequenceNumbers=N\n" +
                 "SocketAcceptPort=" + quickfixPort + "\n";
         
-            LOG.info("Exchange Acceptor configured on port {} (accepts BROKER, MINIFIX, MINIFIXJ, MINIFIX-J)", quickfixPort);
+            LOG.info("Exchange Acceptor configured on port {} (accepts FIX 4.4 and FIX 4.2 sessions for BROKER, MINIFIX, MINIFIXJ, MINIFIX-J)", quickfixPort);
         ByteArrayInputStream inputStream = new ByteArrayInputStream(settings.getBytes(StandardCharsets.UTF_8));
         return new SessionSettings(inputStream);
     }

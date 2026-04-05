@@ -18,8 +18,8 @@
     10. Order book snapshot
 
 .EXAMPLE
-  .\test-e2e.ps1
-  .\test-e2e.ps1 -BaseUrl "http://localhost:8090" -ClientId "BROKER1" -ShowDetail
+  .\scripts\tests\test-e2e.ps1
+  .\scripts\tests\test-e2e.ps1 -BaseUrl "http://localhost:8090" -ClientId "BROKER1" -ShowDetail
 #>
 
 param(

@@ -1,0 +1,4 @@
+# Helper for T31: Submit an order then cancel it
+
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,ORCL,CSCO]|54=1|40=2|38=100|44=$RNDNUM[50,500/0.25]|59=0
+Send:OrderCancelRequest:11=$UNIQUE|41=$LASTUNIQUE|55=$RNDSTR[AAPL,MSFT,ORCL,CSCO]|54=1|38=100|60=$TIMESTAMP

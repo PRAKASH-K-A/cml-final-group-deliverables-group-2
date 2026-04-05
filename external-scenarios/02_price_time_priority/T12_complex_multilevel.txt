@@ -1,0 +1,99 @@
+# ============================================================================
+# T12 ? Complex Multi-Level Matching
+# ============================================================================
+# Validates: Price-time priority across multiple levels with a large
+#            sweeping order. Verifies correct fill sequence and quantities.
+# Symbol: MA
+# Setup: 6 buy orders across 3 price levels:
+#   Level 160.00: Buy A (200), Buy B (100)
+#   Level 158.00: Buy C (150), Buy D (150)
+#   Level 155.00: Buy E (200), Buy F (100)
+# Action: Sell 700 @ 155.00 (sweeps all 3 levels)
+# Expected fill sequence (best price first, then FIFO within each level):
+#   1. Buy A: 200 @ 160.00  (CumQty sell=200)
+#   2. Buy B: 100 @ 160.00  (CumQty sell=300)
+#   3. Buy C: 150 @ 158.00  (CumQty sell=450)
+#   4. Buy D: 150 @ 158.00  (CumQty sell=600)
+#   5. Buy E: 100 @ 155.00  (CumQty sell=700) ? partial fill on E (100 of 200)
+#   Buy F: not filled (sell exhausted)
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# ------ Build the Order Book ------
+
+# Level 160.00 (best bid)
+# Buy A: 200 @ 160.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=200|44=160.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=200
+
+# Buy B: 100 @ 160.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=160.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100
+
+# Level 158.00
+# Buy C: 150 @ 158.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=150|44=158.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=150
+
+# Buy D: 150 @ 158.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=150|44=158.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=150
+
+# Level 155.00 (worst bid that still crosses)
+# Buy E: 200 @ 155.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=200|44=155.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=200
+
+# Buy F: 100 @ 155.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=155.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100
+
+# ------ Send the sweeping sell order ------
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=2|40=2|38=700|44=155.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=2|38=700
+
+# ------ Verify fills in price-time priority order ------
+
+# Fill 1: vs Buy A ? 200 @ 160.00
+# Sell: partial (CumQty=200, LeavesQty=500)
+Wait:35=8|55=AAPL|54=2|32=200|31=160.00|14=200|151=500
+# Buy A: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=200|31=160.00|14=200|151=0
+
+# Fill 2: vs Buy B ? 100 @ 160.00
+# Sell: partial (CumQty=300, LeavesQty=400)
+Wait:35=8|55=AAPL|54=2|32=100|31=160.00|14=300|151=400
+# Buy B: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=100|31=160.00|14=100|151=0
+
+# Fill 3: vs Buy C ? 150 @ 158.00
+# Sell: partial (CumQty=450, LeavesQty=250)
+Wait:35=8|55=AAPL|54=2|32=150|31=158.00|14=450|151=250
+# Buy C: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=150|31=158.00|14=150|151=0
+
+# Fill 4: vs Buy D ? 150 @ 158.00
+# Sell: partial (CumQty=600, LeavesQty=100)
+Wait:35=8|55=AAPL|54=2|32=150|31=158.00|14=600|151=100
+# Buy D: fully filled
+Wait:35=8|39=2|55=AAPL|54=1|32=150|31=158.00|14=150|151=0
+
+# Fill 5: vs Buy E ? 100 @ 155.00 (partial fill on E: 100 of 200)
+# Sell: fully filled (CumQty=700, LeavesQty=0)
+Wait:35=8|39=2|55=AAPL|54=2|32=100|31=155.00|14=700|151=0
+# Buy E: partially filled (CumQty=100, LeavesQty=100)
+Wait:35=8|39=1|55=AAPL|54=1|32=100|31=155.00|14=100|151=100
+
+# Buy F and remainder of Buy E should NOT fill
+
+Message:T12 PASSED - Complex multi-level sweep: 3 price levels 6 orders correct fill sequence
+
+Save:results\T12_result.txt
+Disconnect

@@ -1,0 +1,4 @@
+# Helper for T31: Submit a buy-sell pair for matching
+
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,AMZN,MA,DIS,BAC]|54=1|40=2|38=100|44=150.00|59=0
+Send:NewOrderSingle:11=$UNIQUE|55=$RNDSTR[AAPL,MSFT,AMZN,MA,DIS,BAC]|54=2|40=2|38=100|44=150.00|59=0

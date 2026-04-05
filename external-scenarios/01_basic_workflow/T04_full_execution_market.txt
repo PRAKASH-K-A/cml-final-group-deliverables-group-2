@@ -1,0 +1,41 @@
+# ============================================================================
+# T04 ? Full Execution (Market vs Limit)
+# ============================================================================
+# Validates: A market order matches against a resting limit order at the
+#            limit price. Both sides receive fill reports.
+# Symbol: AMZN | Sell limit 200 @ 300.00 (resting), then Buy market 200
+# Expected: Both filled at 300.00
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a limit sell order (will rest in the book) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AMZN|54=2|40=2|38=200|44=300.00|59=0
+
+# Expect sell order acknowledged (resting)
+Wait:35=8|150=0|39=0|55=AMZN|54=2|38=200|14=0|151=200
+
+# --- Step 2: Send a market buy order (should match at 300.00) ---
+Send:NewOrderSingle:11=$UNIQUE|55=AMZN|54=1|40=1|38=200|59=0
+
+# Expect buy market order acknowledged
+Wait:35=8|150=0|39=0|55=AMZN|54=1|38=200|14=0|151=200
+
+# --- Step 3: Expect fills for both sides at the limit price (300.00) ---
+
+# Wait for buy (aggressor) fill: fully filled at 300.00
+Wait:35=8|39=2|55=AMZN|54=1|32=200|31=300.00|14=200|151=0
+
+# Wait for sell (resting) fill: fully filled at 300.00
+Wait:35=8|39=2|55=AMZN|54=2|32=200|31=300.00|14=200|151=0
+
+Message:T04 PASSED - Market order fully executes against resting limit at limit price
+
+Save:results\T04_result.txt
+Disconnect

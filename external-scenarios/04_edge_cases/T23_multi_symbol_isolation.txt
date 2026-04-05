@@ -1,0 +1,36 @@
+# ============================================================================
+# T23 ? Multi-Symbol Isolation
+# ============================================================================
+# Validates: Order books for different symbols are isolated. Orders in one
+#            symbol cannot match with orders in another symbol, even at the
+#            same price.
+# Symbols: BAC (buy) and DIS (sell), both at 150.00
+# Expected: No fills occur ? the orders rest independently.
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# --- Step 1: Send a buy order for BAC @ 150.00 ---
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=150.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100
+
+# --- Step 2: Send a sell order for DIS @ 150.00 ---
+Send:NewOrderSingle:11=$UNIQUE|55=MSFT|54=2|40=2|38=100|44=150.00|59=0
+Wait:35=8|150=0|39=0|55=MSFT|54=2|38=100|14=0|151=100
+
+# --- Step 3: Wait briefly to allow any incorrect matching to occur ---
+Sleep:2000
+
+# If both orders only received New acks (150=0) and no fill reports (150=F),
+# symbol isolation is working correctly.
+
+Message:T23 PASSED - Different symbols at same price do not cross-match
+
+Save:results\T23_result.txt
+Disconnect

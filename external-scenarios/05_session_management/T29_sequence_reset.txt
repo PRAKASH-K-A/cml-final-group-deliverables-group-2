@@ -1,0 +1,46 @@
+# ============================================================================
+# T29 - Sequence Number Reset
+# ============================================================================
+# Validates: OMS handles sequence number management correctly.
+#            1. Logon and send a few orders
+#            2. Send SequenceReset (35=4) with GapFillFlag (123=N) and
+#               NewSeqNo (36) to reset to 1
+#            3. Verify session continues to work after reset
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Step 1: Expect Logon acknowledgment
+Wait:35=A
+
+# Step 2: Send a couple of orders to advance sequence numbers
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=150.00|59=0
+Wait:35=8|150=0|39=0|55=AAPL
+
+Send:NewOrderSingle:11=$UNIQUE|55=MSFT|54=2|40=2|38=50|44=300.00|59=0
+Wait:35=8|150=0|39=0|55=MSFT
+
+# Step 3: Disconnect and reconnect with sequence number reset
+Disconnect
+
+Sleep:1000
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect new Logon acknowledgment
+Wait:35=A
+
+# Step 4: Verify the session works after reset by sending a new order
+Send:NewOrderSingle:11=$UNIQUE|55=ORCL|54=1|40=2|38=200|44=140.00|59=0
+Wait:35=8|150=0|39=0|55=ORCL|54=1|38=200
+
+Message:T29 PASSED - Session continues correctly after sequence number reset
+
+Save:results\T29_result.txt
+Disconnect

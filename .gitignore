@@ -73,3 +73,9 @@ database/
 # FIX
 quickfixj.log
 runtime/
+
+# External scenario outputs
+external-scenarios/results/*.txt
+
+# Generated validation reports
+validation-corrected-*.txt

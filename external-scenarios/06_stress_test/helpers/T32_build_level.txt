@@ -1,0 +1,4 @@
+# Helper script for T29: Send one buy order at a random price level for TSLA
+# Price range: 100.00 to 109.99 with 0.01 step ??? creates deep book
+
+Send:NewOrderSingle:11=$UNIQUE|55=CSCO|54=1|40=2|38=100|44=$RNDNUM[100.00,109.99/0.01]|59=0

@@ -1,0 +1,26 @@
+# ============================================================================
+# T01 ? Limit Buy Order Acknowledged
+# ============================================================================
+# Validates: OMS receives a limit buy order and sends back an ExecutionReport
+#            with ExecType=New (150=0), OrdStatus=New (39=0), correct quantities.
+# Symbol: AAPL | Side: Buy | Qty: 100 | Price: 150.00
+# ============================================================================
+
+Reset
+SenderCompId:{{SENDER_COMP_ID}}
+TargetCompId:{{TARGET_COMP_ID}}
+Connect:{{OMS_HOST}}:{{OMS_PORT}}
+
+# Expect Logon acknowledgment
+Wait:35=A
+
+# Send a limit buy order for 100 AAPL @ 150.00
+Send:NewOrderSingle:11=$UNIQUE|55=AAPL|54=1|40=2|38=100|44=150.00|59=0
+
+# Expect acknowledgment: ExecType=New, OrdStatus=New, CumQty=0, LeavesQty=100
+Wait:35=8|150=0|39=0|55=AAPL|54=1|38=100|14=0|151=100|32=0
+
+Message:T01 PASSED - Limit buy order acknowledged correctly
+
+Save:results\T01_result.txt
+Disconnect
